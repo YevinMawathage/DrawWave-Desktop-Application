@@ -32,9 +32,18 @@ class HandTracker:
 
     def recognize_gesture(self, landmarks):
     # Finger tip and pip landmark indices
-        finger_tips = [8, 12, 16, 20]
-        finger_pips = [6, 10, 14, 18]
+        finger_tips = [8, 12, 16, 20]  # Index, Middle, Ring, Pinky tips
+        finger_pips = [6, 10, 14, 18]  # Corresponding pip (middle) joints
 
+        # Check if thumb is up (using the Y position relative to other joints)
+        thumb_tip = landmarks.landmark[4]  # Thumb tip
+        thumb_cmc = landmarks.landmark[1]  # Thumb CMC joint (base)
+        
+        # Thumb is up when the tip is significantly higher (lower Y) than the base
+        # In camera coordinates, lower Y means higher position (top of screen is Y=0)
+        thumb_up = (thumb_cmc.y - thumb_tip.y) > 0.1
+
+        # Check which fingers are extended
         fingers_up = []
         for tip_idx, pip_idx in zip(finger_tips, finger_pips):
             tip_y = landmarks.landmark[tip_idx].y
@@ -42,10 +51,16 @@ class HandTracker:
             fingers_up.append(tip_y < pip_y)  # True if finger is extended
 
         index_up, middle_up, ring_up, pinky_up = fingers_up
-
-        if index_up and middle_up and not ring_up and not pinky_up:
+        
+        # Color picking gesture: thumbs up, other fingers down (making a "👍" sign)
+        if thumb_up and not index_up and not middle_up and not ring_up and not pinky_up:
+            return "color_pick"
+        # Erase gesture: index and middle fingers up (making a "✌" sign)
+        elif index_up and middle_up and not ring_up and not pinky_up:
             return "erase"
+        # Drawing gesture: only index finger up (pointing "👆")
         elif index_up and not middle_up and not ring_up and not pinky_up:
             return "drawing"
+        # Idle gesture: any other configuration
         else:
             return "idle"

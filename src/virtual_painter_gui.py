@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButt
 from PyQt5.QtGui import QImage, QPixmap, QFont, QKeySequence, QIcon, QColor
 from PyQt5.QtCore import QTimer, Qt
 import cv2
+import time
 from canvas import Canvas
 from canvas_widget import CanvasWidget
 from hand_tracking import HandTracker
@@ -69,42 +70,7 @@ class VirtualPainterGUI(QWidget):
         top_section = QHBoxLayout()
         top_section.setSpacing(20)
         
-            # Camera feed with styled frame and camera switch button
-        camera_container = QVBoxLayout()
-        camera_container.setSpacing(5)
-        
-        # Camera control panel
-        camera_controls = QHBoxLayout()
-        camera_controls.setContentsMargins(0, 0, 0, 5)
-        
-        # Camera switch button with icon
-        self.switch_camera_btn = QToolButton()
-        self.switch_camera_btn.setToolTip("Switch Camera")
-        self.switch_camera_btn.setStyleSheet("""
-            QToolButton {
-                background-color: #6366f1;
-                color: white;
-                border-radius: 6px;
-                padding: 5px;
-                font-size: 14px;
-            }
-            QToolButton:hover {
-                background-color: #818cf8;
-            }
-            QToolButton:pressed {
-                background-color: #4f46e5;
-            }
-        """)
-        self.switch_camera_btn.setText("📷")
-        self.switch_camera_btn.setFixedSize(30, 30)
-        self.switch_camera_btn.setCursor(Qt.PointingHandCursor)
-        self.switch_camera_btn.clicked.connect(self.switch_camera)
-        
-        # Only show the button if there are multiple cameras
-        if len(self.available_cameras) > 1:
-            camera_controls.addWidget(self.switch_camera_btn)
-        camera_controls.addStretch()
-        
+            # Camera feed with styled frame
         self.camera_feed_label = QLabel(self)
         self.camera_feed_label.setFixedSize(640, 480)
         self.camera_feed_label.setStyleSheet("""
@@ -114,10 +80,7 @@ class VirtualPainterGUI(QWidget):
                 border: 2px solid #c7d2fe;
             }
         """)
-        
-        camera_container.addLayout(camera_controls)
-        camera_container.addWidget(self.camera_feed_label)
-        top_section.addLayout(camera_container)
+        top_section.addWidget(self.camera_feed_label)
         
         # Canvas widget with styled frame
         self.canvas_widget = CanvasWidget(self.canvas)
@@ -148,6 +111,12 @@ class VirtualPainterGUI(QWidget):
         self.save_btn = QPushButton("Save")
         self.color_btn = QPushButton(" Change Color")
         
+        # Camera switch button with circular icon
+        self.switch_camera_btn = QToolButton()
+        self.switch_camera_btn.setText("📷")
+        self.switch_camera_btn.setToolTip("Switch to next camera")
+        self.switch_camera_btn.setFixedSize(40, 40)  # Fixed circular size
+        
         # Style buttons to match start screen
         button_style = """
             QPushButton {
@@ -166,11 +135,29 @@ class VirtualPainterGUI(QWidget):
             }
         """
         
+        # Style for normal buttons
         for btn in [self.mouse_btn, self.mouse_erase_btn, self.gesture_btn, self.back_btn, 
                    self.clear_btn, self.save_btn, self.color_btn]:
             btn.setStyleSheet(button_style)
             btn.setFont(QFont("Segoe UI", 12, QFont.Bold))
             btn.setCursor(Qt.PointingHandCursor)
+            
+        # Special style for circular camera button
+        self.switch_camera_btn.setStyleSheet("""
+            QToolButton {
+                background-color: #FFFFFF;
+                color: white;
+                border-radius: 20px;  /* Half of the fixed size for perfect circle */
+                font-size: 16px;
+            }
+            QToolButton:hover {
+                background-color: #818cf8;
+            }
+            QToolButton:pressed {
+                background-color: #4f46e5;
+            }
+        """)
+        self.switch_camera_btn.setCursor(Qt.PointingHandCursor)
         
         # Add stretch to center buttons
         control_panel.addStretch()
@@ -181,6 +168,9 @@ class VirtualPainterGUI(QWidget):
         control_panel.addWidget(self.color_btn)
         control_panel.addWidget(self.color_preview)
         control_panel.addWidget(self.save_btn)
+        # Only show the camera button if there are cameras available
+        if self.available_cameras:
+            control_panel.addWidget(self.switch_camera_btn)
         control_panel.addWidget(self.back_btn)
         control_panel.addStretch()
         
@@ -197,6 +187,7 @@ class VirtualPainterGUI(QWidget):
         self.save_btn.clicked.connect(self.save_canvas)
         self.color_btn.clicked.connect(self.pick_color)
         self.back_btn.clicked.connect(self.back_button_click)
+        self.switch_camera_btn.clicked.connect(self.switch_camera)
         
         
         
@@ -303,7 +294,42 @@ class VirtualPainterGUI(QWidget):
     def handle_gesture(self, gesture, landmarks, smoothed_tip=None):
         index_tip = landmarks.landmark[8]
         middle_tip = landmarks.landmark[12]
-    
+        ring_tip = landmarks.landmark[16]
+        pinky_tip = landmarks.landmark[20]
+        
+        # Track if we're holding the color picking gesture
+        if not hasattr(self, "_color_pick_active"):
+            self._color_pick_active = False
+            self._color_pick_frames = 0  # Count frames to avoid accidental triggers
+            self._last_color_pick_time = 0  # Timestamp of last color pick
+        
+        # 👍 Color Pick Mode: Thumbs up gesture
+        if gesture == "color_pick":
+            self._color_pick_frames += 1
+            
+            # Get current time for throttling
+            current_time = time.time()
+            time_since_last = current_time - self._last_color_pick_time
+            
+            # Only trigger after holding gesture for 20 frames (about 0.7 seconds)
+            # And make sure we haven't triggered color picker in the last 3 seconds
+            if self._color_pick_frames >= 20 and time_since_last > 3.0 and not self._color_pick_active:
+                self._color_pick_active = True
+                self._color_pick_frames = 0
+                self._last_color_pick_time = current_time
+                
+                # Show a visual feedback that color picker is activated
+                print("[GESTURE] Color picker activated with thumbs up gesture 👍")
+                
+                # Call color picker in a non-blocking way
+                QTimer.singleShot(100, self.pick_color)
+            return
+        else:
+            # Reset color pick tracking when not in color pick gesture
+            self._color_pick_active = False
+            self._color_pick_frames = 0
+        
+        # ✌️ Erase Mode: Index and middle fingers up
         if gesture == "erase":
             midpoint = (
                 (index_tip.x + middle_tip.x) / 2,
@@ -321,9 +347,9 @@ class VirtualPainterGUI(QWidget):
             self.canvas.reset_previous_points()
             return
 
-        # ✍️ Draw Mode: Only index finger up
+        # ☝️ Draw Mode: Only index finger up
         elif gesture == "drawing":
-            self.canvas.draw((index_tip.x, index_tip.y))  # Fixed: Use index_tip coordinates directly
+            self.canvas.draw((index_tip.x, index_tip.y))
         
         # 💤 Idle Mode: No finger action
         elif gesture == "idle":
@@ -384,24 +410,36 @@ class VirtualPainterGUI(QWidget):
         
     def switch_camera(self):
         """Switch to the next available camera"""
-        if not self.available_cameras or self.mode != "gesture":
+        if self.mode != "gesture":
+            # Enable gesture mode first if we're not in it
+            self.enable_gesture_mode()
             return
             
+        # Try the next camera index (0-4)
+        next_index = (self.camera_index + 1) % 5
+        
         # Release current camera
         if self.capture is not None:
             self.capture.release()
             
-        # Find the index of the next camera
-        current_index = self.available_cameras.index(self.camera_index) if self.camera_index in self.available_cameras else 0
-        next_index = (current_index + 1) % len(self.available_cameras)
-        self.camera_index = self.available_cameras[next_index]
+        # Try to open the next camera
+        self.capture = cv2.VideoCapture(next_index)
         
-        # Open the new camera
-        self.capture = cv2.VideoCapture(self.camera_index)
+        # Check if camera opened successfully
+        if self.capture.isOpened():
+            self.camera_index = next_index
+            # Add the new index to available cameras if not already there
+            if next_index not in self.available_cameras:
+                self.available_cameras.append(next_index)
+            print(f"[CAMERA] Switched to camera index {self.camera_index}")
+        else:
+            # If camera failed to open, try the next one recursively
+            self.camera_index = next_index  # Set this so we don't get stuck
+            self.switch_camera()
+            return
         
         # Save camera index to database
         self.db.save_setting('camera_index', str(self.camera_index))
-        print(f"[CAMERA] Switched to camera index {self.camera_index}")
 
     def clear_canvas(self):
         self.canvas.clear()
