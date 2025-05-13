@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSpacerItem, QSizePolicy, QFileDialog, QColorDialog, QShortcut
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSpacerItem, QSizePolicy, QFileDialog, QColorDialog, QShortcut, QToolButton
 from PyQt5.QtGui import QImage, QPixmap, QFont, QKeySequence, QIcon, QColor
 from PyQt5.QtCore import QTimer, Qt
 import cv2
@@ -26,20 +26,23 @@ class VirtualPainterGUI(QWidget):
         """)
         self.setWindowIcon(QIcon('virtual_painter.png'))
         
+        # Initialize camera variables
+        self.available_cameras = self.find_available_cameras(max_index=4)
         
-        def find_available_camera(max_index=4):
-            for idx in range(max_index + 1):
-                cap = cv2.VideoCapture(idx)
-                if cap.isOpened():
-                    cap.release()
-                    return idx
-            return None
-        
-        camera_index = find_available_camera()
-        if camera_index is not None:
-            self.capture = cv2.VideoCapture(camera_index)
+        if self.available_cameras:
+            # Load last used camera index from database if available
+            saved_camera_index = self.db.get_setting('camera_index')
+            
+            if saved_camera_index and int(saved_camera_index) in self.available_cameras:
+                self.camera_index = int(saved_camera_index)
+            else:
+                self.camera_index = self.available_cameras[0]
+                
+            self.capture = cv2.VideoCapture(self.camera_index)
+            print(f"[CAMERA] Using camera index {self.camera_index}")
         else:
             self.capture = None
+            self.camera_index = 0
             print("No camera found.")
         
         self.color_preview = QLabel()
@@ -66,7 +69,42 @@ class VirtualPainterGUI(QWidget):
         top_section = QHBoxLayout()
         top_section.setSpacing(20)
         
-        # Camera feed with styled frame
+            # Camera feed with styled frame and camera switch button
+        camera_container = QVBoxLayout()
+        camera_container.setSpacing(5)
+        
+        # Camera control panel
+        camera_controls = QHBoxLayout()
+        camera_controls.setContentsMargins(0, 0, 0, 5)
+        
+        # Camera switch button with icon
+        self.switch_camera_btn = QToolButton()
+        self.switch_camera_btn.setToolTip("Switch Camera")
+        self.switch_camera_btn.setStyleSheet("""
+            QToolButton {
+                background-color: #6366f1;
+                color: white;
+                border-radius: 6px;
+                padding: 5px;
+                font-size: 14px;
+            }
+            QToolButton:hover {
+                background-color: #818cf8;
+            }
+            QToolButton:pressed {
+                background-color: #4f46e5;
+            }
+        """)
+        self.switch_camera_btn.setText("📷")
+        self.switch_camera_btn.setFixedSize(30, 30)
+        self.switch_camera_btn.setCursor(Qt.PointingHandCursor)
+        self.switch_camera_btn.clicked.connect(self.switch_camera)
+        
+        # Only show the button if there are multiple cameras
+        if len(self.available_cameras) > 1:
+            camera_controls.addWidget(self.switch_camera_btn)
+        camera_controls.addStretch()
+        
         self.camera_feed_label = QLabel(self)
         self.camera_feed_label.setFixedSize(640, 480)
         self.camera_feed_label.setStyleSheet("""
@@ -76,7 +114,10 @@ class VirtualPainterGUI(QWidget):
                 border: 2px solid #c7d2fe;
             }
         """)
-        top_section.addWidget(self.camera_feed_label)
+        
+        camera_container.addLayout(camera_controls)
+        camera_container.addWidget(self.camera_feed_label)
+        top_section.addLayout(camera_container)
         
         # Canvas widget with styled frame
         self.canvas_widget = CanvasWidget(self.canvas)
@@ -192,8 +233,16 @@ class VirtualPainterGUI(QWidget):
     def enable_mouse_erase_mode(self):
         self.mode = "mouse"
         self.canvas_widget.mouse_mode = "erase"
-        if self.capture:
+        
+        # Stop the camera feed if it's running
+        if self.capture is not None:
             self.capture.release()
+            self.capture = None
+        
+        # Clear any cursor display and revert to standard canvas display
+        self.canvas_widget.current_display_canvas = None
+        self.canvas_widget.update()
+        
         print("[MODE] Mouse Erase Enabled")
     
         
@@ -232,7 +281,7 @@ class VirtualPainterGUI(QWidget):
                 self._frame_counter = 0
             self._frame_counter += 1
             if self._frame_counter % 3 == 0:  # Increase update rate to ~20 FPS
-                # Get canvas with cursor for display
+                # Get canvas with cursor for display only in gesture mode
                 canvas_with_cursor = self.canvas.draw_cursor()
                 self.canvas_widget.update_canvas(canvas_with_cursor)    
 
@@ -298,14 +347,61 @@ class VirtualPainterGUI(QWidget):
     def enable_mouse_mode(self):
         self.mode = "mouse"
         self.canvas_widget.mouse_mode = "draw"
+        
+        # Stop the camera feed if it's running
         if self.capture is not None:
-            self.capture.release()  # Properly release camera
+            self.capture.release()
+            self.capture = None
+        
+        # Clear any cursor display and revert to standard canvas display
+        self.canvas_widget.current_display_canvas = None
+        self.canvas_widget.update()
+        
         print("[MODE] Mouse Drawing Enabled")
 
     def enable_gesture_mode(self):
         self.mode = "gesture"
-        self.capture = cv2.VideoCapture(0)  # Restart webcam
+        if self.capture is not None:
+            self.capture.release()
+        
+        # Start the webcam with the current camera index
+        self.capture = cv2.VideoCapture(self.camera_index)
+        
+        # Reset canvas drawing points for clean state
+        self.canvas.reset_previous_points()
+        
         print("[MODE] Gesture Drawing Enabled")
+        
+    def find_available_cameras(self, max_index=4):
+        """Find all available camera indices"""
+        available_indices = []
+        for idx in range(max_index + 1):
+            cap = cv2.VideoCapture(idx)
+            if cap.isOpened():
+                available_indices.append(idx)
+                cap.release()
+        return available_indices
+        
+    def switch_camera(self):
+        """Switch to the next available camera"""
+        if not self.available_cameras or self.mode != "gesture":
+            return
+            
+        # Release current camera
+        if self.capture is not None:
+            self.capture.release()
+            
+        # Find the index of the next camera
+        current_index = self.available_cameras.index(self.camera_index) if self.camera_index in self.available_cameras else 0
+        next_index = (current_index + 1) % len(self.available_cameras)
+        self.camera_index = self.available_cameras[next_index]
+        
+        # Open the new camera
+        self.capture = cv2.VideoCapture(self.camera_index)
+        
+        # Save camera index to database
+        self.db.save_setting('camera_index', str(self.camera_index))
+        print(f"[CAMERA] Switched to camera index {self.camera_index}")
 
     def clear_canvas(self):
         self.canvas.clear()

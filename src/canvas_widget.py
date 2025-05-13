@@ -29,7 +29,7 @@ class CanvasWidget(QWidget):
         painter.drawImage(0, 0, canvas_image)
 
     def mousePressEvent(self, event: QMouseEvent):
-        if event.button() == Qt.LeftButton and getattr(self.parent(), "mode", "") == "mouse":
+        if event.button() == Qt.LeftButton and self.parent().mode == "mouse":
             self.drawing = True
             self.last_pos = event.pos()
             self.canvas.reset_previous_points()
@@ -37,7 +37,7 @@ class CanvasWidget(QWidget):
             self.update()
 
     def mouseMoveEvent(self, event: QMouseEvent):
-        if self.drawing and getattr(self.parent(), "mode", "") == "mouse":
+        if self.drawing and self.parent().mode == "mouse":
             current_pos = event.pos()
             self._perform_action(event)
             self.last_pos = current_pos
@@ -55,8 +55,10 @@ class CanvasWidget(QWidget):
 
     
     def _perform_action(self, event):
-        norm_x = event.x() / self.canvas.width
-        norm_y = event.y() / self.canvas.height
+        # Convert mouse coordinates to normalized canvas coordinates
+        norm_x = max(0, min(1, event.x() / self.canvas.width))
+        norm_y = max(0, min(1, event.y() / self.canvas.height))
+        
         if self.mouse_mode == "draw":
             self.canvas.draw((norm_x, norm_y))
         elif self.mouse_mode == "erase":
