@@ -201,12 +201,12 @@ class VirtualPainterGUI(QWidget):
     def update_camera_feed(self):
         if self.mode != "gesture":
             return
-    
+
         ret, frame = self.capture.read()
         if not ret:
             print("❌ Could not access the webcam.")
             return
-    
+
         # Remove debug prints to reduce overhead
         # print("Camera working?", ret)
         # print("[INFO] Camera frame captured.")
@@ -214,12 +214,17 @@ class VirtualPainterGUI(QWidget):
         if ret:
             frame = cv2.flip(frame, 1)
             frame, result = self.hand_tracker.detect_hands(frame)
-    
+
             if result.multi_hand_landmarks:
                 # Remove debug print
                 # print("[INFO] Hand detected.")
                 landmarks = result.multi_hand_landmarks[0]
                 gesture = self.hand_tracker.recognize_gesture(landmarks)
+                
+                # Update cursor position to track index finger tip
+                index_tip = landmarks.landmark[8]
+                self.canvas.set_cursor_position(index_tip.x, index_tip.y)
+                
                 self.handle_gesture(gesture, landmarks)
                 
             # Optimize canvas update frequency
@@ -227,7 +232,9 @@ class VirtualPainterGUI(QWidget):
                 self._frame_counter = 0
             self._frame_counter += 1
             if self._frame_counter % 3 == 0:  # Increase update rate to ~20 FPS
-                self.canvas_widget.update()    
+                # Get canvas with cursor for display
+                canvas_with_cursor = self.canvas.draw_cursor()
+                self.canvas_widget.update_canvas(canvas_with_cursor)    
 
             # Convert the frame to a format suitable for displaying in PyQt
             height, width, channel = frame.shape
@@ -235,6 +242,9 @@ class VirtualPainterGUI(QWidget):
             q_img = QImage(frame.data, width, height, bytes_per_line, QImage.Format_BGR888)
             pixmap = QPixmap.fromImage(q_img)
             self.camera_feed_label.setPixmap(pixmap)
+            
+            
+            
             
             
             

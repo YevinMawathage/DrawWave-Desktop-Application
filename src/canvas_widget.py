@@ -9,6 +9,7 @@ class CanvasWidget(QWidget):
         self.drawing = False
         self.last_pos = None
         self.mouse_mode = "erase"
+        self.current_display_canvas = None
 
     def set_drawing(self, status):
         self.drawing = status
@@ -16,7 +17,11 @@ class CanvasWidget(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        canvas_image = QImage(self.canvas.get_canvas().data,
+        
+        # Use the canvas with cursor if available, otherwise use the normal canvas
+        canvas_data = self.current_display_canvas if self.current_display_canvas is not None else self.canvas.get_canvas()
+        
+        canvas_image = QImage(canvas_data.data,
                               self.canvas.width,
                               self.canvas.height,
                               self.canvas.width * 3,
@@ -42,6 +47,11 @@ class CanvasWidget(QWidget):
         if event.button() == Qt.LeftButton:
             self.drawing = False
             self.last_pos = None
+            
+    def update_canvas(self, canvas_data):
+        """Update the canvas with the provided canvas data (with cursor)"""
+        self.current_display_canvas = canvas_data
+        self.update()
 
     
     def _perform_action(self, event):
