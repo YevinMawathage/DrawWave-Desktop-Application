@@ -30,8 +30,8 @@ class VirtualPainterGUI(QWidget):
         # Initialize camera variables
         self.available_cameras = self.find_available_cameras(max_index=4)
         
+        # Initialize camera with delay
         if self.available_cameras:
-            # Load last used camera index from database if available
             saved_camera_index = self.db.get_setting('camera_index')
             
             if saved_camera_index and int(saved_camera_index) in self.available_cameras:
@@ -39,12 +39,21 @@ class VirtualPainterGUI(QWidget):
             else:
                 self.camera_index = self.available_cameras[0]
                 
-            self.capture = cv2.VideoCapture(self.camera_index)
-            print(f"[CAMERA] Using camera index {self.camera_index}")
+            try:
+                self.capture = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
+                time.sleep(0.5)  # Add small delay for camera initialization
+                if self.capture.isOpened():
+                    print(f"[CAMERA] Using camera index {self.camera_index}")
+                else:
+                    print("[WARNING] Camera failed to initialize")
+                    self.capture = None
+            except Exception as e:
+                print(f"[ERROR] Camera initialization error: {e}")
+                self.capture = None
         else:
             self.capture = None
             self.camera_index = 0
-            print("No camera found.")
+            print("[WARNING] No cameras found")
         
         self.color_preview = QLabel()
         self.color_preview.setFixedSize(32, 32)
@@ -297,37 +306,31 @@ class VirtualPainterGUI(QWidget):
         ring_tip = landmarks.landmark[16]
         pinky_tip = landmarks.landmark[20]
         
+        if not hasattr(self, "_clear_frames"):
+            self._clear_frames = 0
+            self._last_clear_time = 0
+        
         # Track if we're holding the color picking gesture
         if not hasattr(self, "_color_pick_active"):
             self._color_pick_active = False
             self._color_pick_frames = 0  # Count frames to avoid accidental triggers
             self._last_color_pick_time = 0  # Timestamp of last color pick
         
-        # 👍 Color Pick Mode: Thumbs up gesture
-        if gesture == "color_pick":
-            self._color_pick_frames += 1
-            
-            # Get current time for throttling
+        # 👍 clear canvas: Thumbs up gesture
+        if gesture == "clear":
+            self._clear_frames += 1
             current_time = time.time()
-            time_since_last = current_time - self._last_color_pick_time
-            
-            # Only trigger after holding gesture for 20 frames (about 0.7 seconds)
-            # And make sure we haven't triggered color picker in the last 3 seconds
-            if self._color_pick_frames >= 20 and time_since_last > 3.0 and not self._color_pick_active:
-                self._color_pick_active = True
-                self._color_pick_frames = 0
-                self._last_color_pick_time = current_time
+            time_since_last = current_time - self._last_clear_time
                 
-                # Show a visual feedback that color picker is activated
-                print("[GESTURE] Color picker activated with thumbs up gesture 👍")
-                
-                # Call color picker in a non-blocking way
-                QTimer.singleShot(100, self.pick_color)
+            if self._clear_frames >= 30 and time_since_last > 3.0:
+                self._clear_frames = 0
+                self._last_clear_time = current_time
+                print("[GESTURE] Canvas cleared with thumbs up gesture 👍")
+                self.clear_canvas()  # Clear the canvas
             return
         else:
-            # Reset color pick tracking when not in color pick gesture
-            self._color_pick_active = False
-            self._color_pick_frames = 0
+        # Reset clear tracking when not in clear gesture
+            self._clear_frames = 0
         
         # ✌️ Erase Mode: Index and middle fingers up
         if gesture == "erase":
@@ -386,26 +389,59 @@ class VirtualPainterGUI(QWidget):
         print("[MODE] Mouse Drawing Enabled")
 
     def enable_gesture_mode(self):
+        """Enable gesture mode with improved camera handling"""
         self.mode = "gesture"
+        
+        # Release existing capture if any
         if self.capture is not None:
             self.capture.release()
+            self.capture = None
         
-        # Start the webcam with the current camera index
-        self.capture = cv2.VideoCapture(self.camera_index)
-        
-        # Reset canvas drawing points for clean state
-        self.canvas.reset_previous_points()
-        
-        print("[MODE] Gesture Drawing Enabled")
+        try:
+            # Try to initialize camera with DirectShow backend
+            self.capture = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
+            
+            if not self.capture.isOpened():
+                raise Exception("Failed to open camera")
+                
+            # Test camera by reading a frame
+            ret, _ = self.capture.read()
+            if not ret:
+                raise Exception("Failed to read from camera")
+                
+            # Reset canvas drawing points for clean state
+            self.canvas.reset_previous_points()
+            print(f"[MODE] Gesture Drawing Enabled (Camera {self.camera_index})")
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to initialize camera: {e}")
+            # Try to find another available camera
+            available_cameras = self.find_available_cameras()
+            if available_cameras and self.camera_index in available_cameras:
+                # Try next available camera
+                next_index = (available_cameras.index(self.camera_index) + 1) % len(available_cameras)
+                self.camera_index = available_cameras[next_index]
+                print(f"[CAMERA] Switching to camera index {self.camera_index}")
+                self.enable_gesture_mode()  # Try again with new camera
+            else:
+                print("[ERROR] No working cameras found")
+                self.mode = "mouse"  # Fall back to mouse mode
+                self.canvas_widget.mouse_mode = "draw"
         
     def find_available_cameras(self, max_index=4):
-        """Find all available camera indices"""
+        """Find all available camera indices with better error handling"""
         available_indices = []
         for idx in range(max_index + 1):
-            cap = cv2.VideoCapture(idx)
-            if cap.isOpened():
-                available_indices.append(idx)
-                cap.release()
+            try:
+                cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)  # Add CAP_DSHOW backend for Windows
+                if cap.isOpened():
+                    ret, _ = cap.read()  # Try to read a frame
+                    if ret:
+                        available_indices.append(idx)
+                    cap.release()
+            except Exception as e:
+                print(f"[WARNING] Error checking camera {idx}: {e}")
+                continue
         return available_indices
         
     def switch_camera(self):
@@ -484,15 +520,14 @@ class VirtualPainterGUI(QWidget):
             
             # Save color to database
             self.db.save_setting('last_color', str((r, g, b)))
-            
-           
 
-            
-            
-            
-            
-            
-            
-            
-            
-            
+
+
+
+
+
+
+
+
+
+

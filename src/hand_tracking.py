@@ -53,8 +53,8 @@ class HandTracker:
         index_up, middle_up, ring_up, pinky_up = fingers_up
         
         # Color picking gesture: thumbs up, other fingers down (making a "👍" sign)
-        if thumb_up and not index_up and not middle_up and not ring_up and not pinky_up:
-            return "color_pick"
+        if thumb_up and not any(fingers_up):
+            return "clear"
         # Erase gesture: index and middle fingers up (making a "✌" sign)
         elif index_up and middle_up and not ring_up and not pinky_up:
             return "erase"
