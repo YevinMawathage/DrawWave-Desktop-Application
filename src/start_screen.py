@@ -2,6 +2,8 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QApplicat
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QLinearGradient, QPalette, QColor, QBrush, QIcon
 import sys
+import os
+from resource_path import resource_path
 
 from virtual_painter_gui import VirtualPainterGUI
 
@@ -18,7 +20,8 @@ class StartScreen(QWidget):
                 );
             }
         """)
-        self.setWindowIcon(QIcon('virtual_painter.png'))
+        icon_path = resource_path('virtual_painter.png')
+        self.setWindowIcon(QIcon(icon_path))
 
         layout = QVBoxLayout()
         layout.setSpacing(30)

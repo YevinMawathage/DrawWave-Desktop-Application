@@ -3,6 +3,8 @@ from PyQt5.QtGui import QImage, QPixmap, QFont, QKeySequence, QIcon, QColor
 from PyQt5.QtCore import QTimer, Qt
 import cv2
 import time
+import os
+from resource_path import resource_path
 from canvas import Canvas
 from canvas_widget import CanvasWidget
 from hand_tracking import HandTracker
@@ -12,8 +14,9 @@ class VirtualPainterGUI(QWidget):
     def __init__(self):
         super().__init__()
         
-        # Initialize database
-        self.db = Database("virtual_painter.db")
+        # Initialize database with correct path
+        db_path = resource_path('virtual_painter.db')
+        self.db = Database(db_path)
         
         self.setWindowTitle("DrawWave")
         self.setGeometry(100, 100, 1280, 720)
@@ -25,7 +28,8 @@ class VirtualPainterGUI(QWidget):
                 );
             }
         """)
-        self.setWindowIcon(QIcon('virtual_painter.png'))
+        icon_path = resource_path('virtual_painter.png')
+        self.setWindowIcon(QIcon(icon_path))
         
         # Initialize camera variables
         self.available_cameras = self.find_available_cameras(max_index=4)
@@ -428,54 +432,82 @@ class VirtualPainterGUI(QWidget):
                 self.mode = "mouse"  # Fall back to mouse mode
                 self.canvas_widget.mouse_mode = "draw"
         
-    def find_available_cameras(self, max_index=4):
+    def find_available_cameras(self, max_index=2):
         """Find all available camera indices with better error handling"""
         available_indices = []
         for idx in range(max_index + 1):
             try:
-                cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)  # Add CAP_DSHOW backend for Windows
+                cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
                 if cap.isOpened():
-                    ret, _ = cap.read()  # Try to read a frame
+                    ret, _ = cap.read()
                     if ret:
                         available_indices.append(idx)
-                    cap.release()
+                cap.release()
             except Exception as e:
                 print(f"[WARNING] Error checking camera {idx}: {e}")
                 continue
         return available_indices
         
     def switch_camera(self):
-        """Switch to the next available camera"""
+        """Switch to the next available camera within a fixed range (0-2)"""
         if self.mode != "gesture":
             # Enable gesture mode first if we're not in it
             self.enable_gesture_mode()
             return
             
-        # Try the next camera index (0-4)
-        next_index = (self.camera_index + 1) % 5
+        # Only try cameras 0-2 (typically built-in and most common external cameras)
+        max_camera_index = 2
+        next_index = (self.camera_index + 1) % (max_camera_index + 1)
         
         # Release current camera
         if self.capture is not None:
             self.capture.release()
+            self.capture = None
             
-        # Try to open the next camera
-        self.capture = cv2.VideoCapture(next_index)
-        
-        # Check if camera opened successfully
-        if self.capture.isOpened():
+        try:
+            # Try to open the next camera with DirectShow backend
+            self.capture = cv2.VideoCapture(next_index, cv2.CAP_DSHOW)
+            
+            # Test if camera opened successfully and can read frames
+            if self.capture.isOpened():
+                ret, _ = self.capture.read()
+                if ret:
+                    self.camera_index = next_index
+                    print(f"[CAMERA] Switched to camera index {self.camera_index}")
+                    # Save camera index to database
+                    self.db.save_setting('camera_index', str(self.camera_index))
+                    return
+                    
+            raise Exception("Failed to initialize camera")
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to switch to camera {next_index}: {e}")
+            # Try next camera in sequence
             self.camera_index = next_index
-            # Add the new index to available cameras if not already there
-            if next_index not in self.available_cameras:
-                self.available_cameras.append(next_index)
-            print(f"[CAMERA] Switched to camera index {self.camera_index}")
-        else:
-            # If camera failed to open, try the next one recursively
-            self.camera_index = next_index  # Set this so we don't get stuck
-            self.switch_camera()
-            return
-        
-        # Save camera index to database
-        self.db.save_setting('camera_index', str(self.camera_index))
+            self.capture = None
+            
+            # Try remaining cameras in range
+            remaining_attempts = max_camera_index
+            while remaining_attempts > 0:
+                try:
+                    next_index = (next_index + 1) % (max_camera_index + 1)
+                    self.capture = cv2.VideoCapture(next_index, cv2.CAP_DSHOW)
+                    if self.capture.isOpened():
+                        ret, _ = self.capture.read()
+                        if ret:
+                            self.camera_index = next_index
+                            print(f"[CAMERA] Switched to camera index {self.camera_index}")
+                            self.db.save_setting('camera_index', str(self.camera_index))
+                            return
+                    self.capture = None
+                except Exception as e:
+                    print(f"[ERROR] Failed to switch to camera {next_index}: {e}")
+                remaining_attempts -= 1
+                
+            # If all attempts fail, fall back to mouse mode
+            print("[ERROR] No working cameras found")
+            self.mode = "mouse"
+            self.canvas_widget.mouse_mode = "draw"
 
     def clear_canvas(self):
         self.canvas.clear()
@@ -520,14 +552,3 @@ class VirtualPainterGUI(QWidget):
             
             # Save color to database
             self.db.save_setting('last_color', str((r, g, b)))
-
-
-
-
-
-
-
-
-
-
-
