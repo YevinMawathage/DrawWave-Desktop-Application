@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 
 # DrawWave - AI-Powered Virtual Painter
 
@@ -158,3 +159,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
   Made with ❤️ for the joy of creative expression through technology
 </p>
 
+=======
+# AI Virtual Painter
+
+This project enables users to draw on a whiteboard using hand gestures and mouse input. It uses OpenCV, MediaPipe, NumPy, PyQt5, and SQLite to build the application.
+
+## Features:
+- Hand gesture recognition
+- Color and brush size selection
+- Undo/Redo, Save/Export functionality
+>>>>>>> bb13ed99570bbb1a47fcbd98e41ca5ac9dc469a0
