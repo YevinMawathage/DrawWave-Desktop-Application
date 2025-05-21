@@ -301,9 +301,6 @@ class VirtualPainterGUI(QWidget):
             
             
             
-            
-            
-            
     def handle_gesture(self, gesture, landmarks, smoothed_tip=None):
         index_tip = landmarks.landmark[8]
         middle_tip = landmarks.landmark[12]
