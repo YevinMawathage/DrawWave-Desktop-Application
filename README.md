@@ -4,7 +4,7 @@
 
 DrawWave is an interactive desktop application that enables users to draw on a digital canvas using hand gestures or traditional mouse input. The application leverages computer vision and machine learning to track hand movements and convert them into drawing actions, providing an intuitive and engaging drawing experience.
 
-![DrawWave Application](src/virtual_painter.png)
+![DrawWave Application](src/DrawWave%20-%20Poster%20-%2010898817.jpg)
 
 ## 🌟 Features
 
