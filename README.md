@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 
 # DrawWave - AI-Powered Virtual Painter
 
