@@ -64,7 +64,7 @@ class StartScreen(QWidget):
         start_button.clicked.connect(self.start_button_click)
         layout.addWidget(start_button, alignment=Qt.AlignCenter)
 
-        # Spacer
+       
         layout.addStretch(2)
 
         self.setLayout(layout)

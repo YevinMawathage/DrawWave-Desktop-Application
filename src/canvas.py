@@ -15,48 +15,43 @@ class Canvas:
         self.history = []
         self.redo_stack = []
         self.cursor_position = (0, 0)
-        self.history_limit = 1  # Added limit to history stack
+        self.history_limit = 1  
         self.db = db
         
     def set_cursor_position(self, x, y):
         self.cursor_position = (int(x * self.width), int(y * self.height))
 
     def draw_cursor(self):
-        # Create a copy of the canvas to draw cursor on
         temp_canvas = self.canvas.copy()
         
-        # Draw a more noticeable cursor:
-        # 1. Inner solid circle
-        cv2.circle(temp_canvas, self.cursor_position, 5, (0, 120, 255), -1)  # Solid orange circle
+        cv2.circle(temp_canvas, self.cursor_position, 5, (0, 120, 255), -1)  
         
-        # 2. Outer ring with animation effect
         if not hasattr(self, '_cursor_pulse_value'):
             self._cursor_pulse_value = 0
         if not hasattr(self, '_cursor_pulse_direction'):
             self._cursor_pulse_direction = 1
             
-        # Pulse effect for outer ring
+        
         self._cursor_pulse_value += 0.5 * self._cursor_pulse_direction
         if self._cursor_pulse_value >= 10 or self._cursor_pulse_value <= 0:
-            self._cursor_pulse_direction *= -1  # Reverse direction
+            self._cursor_pulse_direction *= -1  
         
         outer_radius = 8 + int(self._cursor_pulse_value)
-        cv2.circle(temp_canvas, self.cursor_position, outer_radius, (0, 165, 255), 2)  # Thicker orange ring
+        cv2.circle(temp_canvas, self.cursor_position, outer_radius, (0, 165, 255), 2)  
         
-        # 3. Draw a crosshair for precise positioning
+       
         crosshair_size = 8
         x, y = self.cursor_position
         cv2.line(temp_canvas, (x - crosshair_size, y), (x + crosshair_size, y), (0, 165, 255), 1)
         cv2.line(temp_canvas, (x, y - crosshair_size), (x, y + crosshair_size), (0, 165, 255), 1)
         
-        # Add cursor mode text based on recognized gesture
         if hasattr(self, '_cursor_mode'):
             mode_text = self._cursor_mode
             cv2.putText(temp_canvas, mode_text, 
                        (self.cursor_position[0] + 15, self.cursor_position[1] - 15), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 120, 255), 2)
         
-        return temp_canvas  # Return for display without saving to history
+        return temp_canvas 
 
 
     def draw(self, current_point, color=None):
@@ -69,7 +64,6 @@ class Canvas:
         if self.previous_point_gesture != current_point:
             cv2.line(self.canvas, self.previous_point_gesture, current_point, self.color, self.brush_size)
 
-            # ✅ Save to DB
             if self.db:
                 self.db.save_action("draw", [self.previous_point_gesture, current_point], self.color)
 
@@ -84,10 +78,8 @@ class Canvas:
 
         if self.previous_point_erase is None:
             self.previous_point_erase = current_point
-            # Draw a circle at the current point for single-point erasing
             cv2.circle(self.canvas, current_point, self.brush_size + 5, (255, 255, 255), -1)
             
-            # Save the single-point erase to DB
             if self.db:
                 self.db.save_action("erase", [current_point, current_point], (255, 255, 255))
                 
@@ -95,10 +87,8 @@ class Canvas:
             return
 
         if self.previous_point_erase != current_point:
-            # Draw a thick line from previous point to current point
             cv2.line(self.canvas, self.previous_point_erase, current_point, (255, 255, 255), self.brush_size + 10)
 
-            # Save erase to DB
             if self.db:
                 self.db.save_action("erase", [self.previous_point_erase, current_point], (255, 255, 255))
 

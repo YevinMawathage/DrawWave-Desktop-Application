@@ -14,7 +14,7 @@ class VirtualPainterGUI(QWidget):
     def __init__(self):
         super().__init__()
         
-        # Initialize database with correct path
+        
         db_path = resource_path('virtual_painter.db')
         self.db = Database(db_path)
         
@@ -31,10 +31,8 @@ class VirtualPainterGUI(QWidget):
         icon_path = resource_path('virtual_painter.png')
         self.setWindowIcon(QIcon(icon_path))
         
-        # Initialize camera variables
         self.available_cameras = self.find_available_cameras(max_index=4)
         
-        # Initialize camera with delay
         if self.available_cameras:
             saved_camera_index = self.db.get_setting('camera_index')
             
@@ -45,7 +43,7 @@ class VirtualPainterGUI(QWidget):
                 
             try:
                 self.capture = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
-                time.sleep(0.5)  # Add small delay for camera initialization
+                time.sleep(0.5)  
                 if self.capture.isOpened():
                     print(f"[CAMERA] Using camera index {self.camera_index}")
                 else:
@@ -124,11 +122,11 @@ class VirtualPainterGUI(QWidget):
         self.save_btn = QPushButton("Save")
         self.color_btn = QPushButton(" Change Color")
         
-        # Camera switch button with circular icon
+        # Camera switch button 
         self.switch_camera_btn = QToolButton()
         self.switch_camera_btn.setText("📷")
         self.switch_camera_btn.setToolTip("Switch to next camera")
-        self.switch_camera_btn.setFixedSize(40, 40)  # Fixed circular size
+        self.switch_camera_btn.setFixedSize(40, 40)  
         
         # Style buttons to match start screen
         button_style = """
@@ -155,7 +153,7 @@ class VirtualPainterGUI(QWidget):
             btn.setFont(QFont("Segoe UI", 12, QFont.Bold))
             btn.setCursor(Qt.PointingHandCursor)
             
-        # Special style for circular camera button
+        
         self.switch_camera_btn.setStyleSheet("""
             QToolButton {
                 background-color: #FFFFFF;
@@ -172,7 +170,7 @@ class VirtualPainterGUI(QWidget):
         """)
         self.switch_camera_btn.setCursor(Qt.PointingHandCursor)
         
-        # Add stretch to center buttons
+     
         control_panel.addStretch()
         control_panel.addWidget(self.mouse_btn)
         control_panel.insertWidget(2, self.mouse_erase_btn)
@@ -181,7 +179,7 @@ class VirtualPainterGUI(QWidget):
         control_panel.addWidget(self.color_btn)
         control_panel.addWidget(self.color_preview)
         control_panel.addWidget(self.save_btn)
-        # Only show the camera button if there are cameras available
+        
         if self.available_cameras:
             control_panel.addWidget(self.switch_camera_btn)
         control_panel.addWidget(self.back_btn)
@@ -217,7 +215,7 @@ class VirtualPainterGUI(QWidget):
                 }}
             """)
         
-        # Initialize webcam timer
+        
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_camera_feed)
         self.timer.start(33)  # ~30 FPS
@@ -225,7 +223,7 @@ class VirtualPainterGUI(QWidget):
         
         
         undo_shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
-        undo_shortcut.setContext(Qt.ApplicationShortcut)  # ✅ Global shortcut context
+        undo_shortcut.setContext(Qt.ApplicationShortcut)  
         undo_shortcut.activated.connect(self.perform_undo)
                 
     def perform_undo(self):
@@ -238,12 +236,12 @@ class VirtualPainterGUI(QWidget):
         self.mode = "mouse"
         self.canvas_widget.mouse_mode = "erase"
         
-        # Stop the camera feed if it's running
+        
         if self.capture is not None:
             self.capture.release()
             self.capture = None
         
-        # Clear any cursor display and revert to standard canvas display
+        
         self.canvas_widget.current_display_canvas = None
         self.canvas_widget.update()
         
@@ -260,36 +258,30 @@ class VirtualPainterGUI(QWidget):
             print("❌ Could not access the webcam.")
             return
 
-        # Remove debug prints to reduce overhead
-        # print("Camera working?", ret)
-        # print("[INFO] Camera frame captured.")
+     
             
         if ret:
             frame = cv2.flip(frame, 1)
             frame, result = self.hand_tracker.detect_hands(frame)
 
             if result.multi_hand_landmarks:
-                # Remove debug print
-                # print("[INFO] Hand detected.")
+               
                 landmarks = result.multi_hand_landmarks[0]
                 gesture = self.hand_tracker.recognize_gesture(landmarks)
                 
-                # Update cursor position to track index finger tip
+               
                 index_tip = landmarks.landmark[8]
                 self.canvas.set_cursor_position(index_tip.x, index_tip.y)
                 
                 self.handle_gesture(gesture, landmarks)
                 
-            # Optimize canvas update frequency
             if not hasattr(self, "_frame_counter"):
                 self._frame_counter = 0
             self._frame_counter += 1
-            if self._frame_counter % 3 == 0:  # Increase update rate to ~20 FPS
-                # Get canvas with cursor for display only in gesture mode
+            if self._frame_counter % 3 == 0:  
                 canvas_with_cursor = self.canvas.draw_cursor()
                 self.canvas_widget.update_canvas(canvas_with_cursor)    
 
-            # Convert the frame to a format suitable for displaying in PyQt
             height, width, channel = frame.shape
             bytes_per_line = 3 * width
             q_img = QImage(frame.data, width, height, bytes_per_line, QImage.Format_BGR888)
@@ -311,13 +303,11 @@ class VirtualPainterGUI(QWidget):
             self._clear_frames = 0
             self._last_clear_time = 0
         
-        # Track if we're holding the color picking gesture
         if not hasattr(self, "_color_pick_active"):
             self._color_pick_active = False
-            self._color_pick_frames = 0  # Count frames to avoid accidental triggers
-            self._last_color_pick_time = 0  # Timestamp of last color pick
-        
-        # 👍 clear canvas: Thumbs up gesture
+            self._color_pick_frames = 0  
+            self._last_color_pick_time = 0  
+
         if gesture == "clear":
             self._clear_frames += 1
             current_time = time.time()
@@ -330,16 +320,13 @@ class VirtualPainterGUI(QWidget):
                 self.clear_canvas()  # Clear the canvas
             return
         else:
-        # Reset clear tracking when not in clear gesture
             self._clear_frames = 0
         
-        # ✌️ Erase Mode: Index and middle fingers up
         if gesture == "erase":
             midpoint = (
                 (index_tip.x + middle_tip.x) / 2,
                 (index_tip.y + middle_tip.y) / 2
             )
-            # Reduce number of erase points for better performance
             offsets = [
                 (0, 0),
                 (0.01, 0), (-0.01, 0),
@@ -351,11 +338,9 @@ class VirtualPainterGUI(QWidget):
             self.canvas.reset_previous_points()
             return
 
-        # ☝️ Draw Mode: Only index finger up
         elif gesture == "drawing":
             self.canvas.draw((index_tip.x, index_tip.y))
         
-        # 💤 Idle Mode: No finger action
         elif gesture == "idle":
             self.canvas.reset_previous_points()
 
@@ -370,7 +355,7 @@ class VirtualPainterGUI(QWidget):
             self.timer.stop()  # Stop the timer
         self.close()  # Close the current screen
         from start_screen import StartScreen
-        self.start_screen = StartScreen()  # Go back to the start screen
+        self.start_screen = StartScreen()  
         self.start_screen.show()
 
 
@@ -378,12 +363,10 @@ class VirtualPainterGUI(QWidget):
         self.mode = "mouse"
         self.canvas_widget.mouse_mode = "draw"
         
-        # Stop the camera feed if it's running
         if self.capture is not None:
             self.capture.release()
             self.capture = None
         
-        # Clear any cursor display and revert to standard canvas display
         self.canvas_widget.current_display_canvas = None
         self.canvas_widget.update()
         
@@ -393,33 +376,27 @@ class VirtualPainterGUI(QWidget):
         """Enable gesture mode with improved camera handling"""
         self.mode = "gesture"
         
-        # Release existing capture if any
         if self.capture is not None:
             self.capture.release()
             self.capture = None
         
         try:
-            # Try to initialize camera with DirectShow backend
             self.capture = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
             
             if not self.capture.isOpened():
                 raise Exception("Failed to open camera")
                 
-            # Test camera by reading a frame
             ret, _ = self.capture.read()
             if not ret:
                 raise Exception("Failed to read from camera")
                 
-            # Reset canvas drawing points for clean state
             self.canvas.reset_previous_points()
             print(f"[MODE] Gesture Drawing Enabled (Camera {self.camera_index})")
             
         except Exception as e:
             print(f"[ERROR] Failed to initialize camera: {e}")
-            # Try to find another available camera
             available_cameras = self.find_available_cameras()
             if available_cameras and self.camera_index in available_cameras:
-                # Try next available camera
                 next_index = (available_cameras.index(self.camera_index) + 1) % len(available_cameras)
                 self.camera_index = available_cameras[next_index]
                 print(f"[CAMERA] Switching to camera index {self.camera_index}")
@@ -448,30 +425,24 @@ class VirtualPainterGUI(QWidget):
     def switch_camera(self):
         """Switch to the next available camera within a fixed range (0-2)"""
         if self.mode != "gesture":
-            # Enable gesture mode first if we're not in it
             self.enable_gesture_mode()
             return
             
-        # Only try cameras 0-2 (typically built-in and most common external cameras)
         max_camera_index = 2
         next_index = (self.camera_index + 1) % (max_camera_index + 1)
         
-        # Release current camera
         if self.capture is not None:
             self.capture.release()
             self.capture = None
             
         try:
-            # Try to open the next camera with DirectShow backend
             self.capture = cv2.VideoCapture(next_index, cv2.CAP_DSHOW)
             
-            # Test if camera opened successfully and can read frames
             if self.capture.isOpened():
                 ret, _ = self.capture.read()
                 if ret:
                     self.camera_index = next_index
                     print(f"[CAMERA] Switched to camera index {self.camera_index}")
-                    # Save camera index to database
                     self.db.save_setting('camera_index', str(self.camera_index))
                     return
                     
@@ -479,11 +450,9 @@ class VirtualPainterGUI(QWidget):
             
         except Exception as e:
             print(f"[ERROR] Failed to switch to camera {next_index}: {e}")
-            # Try next camera in sequence
             self.camera_index = next_index
             self.capture = None
             
-            # Try remaining cameras in range
             remaining_attempts = max_camera_index
             while remaining_attempts > 0:
                 try:
@@ -501,7 +470,6 @@ class VirtualPainterGUI(QWidget):
                     print(f"[ERROR] Failed to switch to camera {next_index}: {e}")
                 remaining_attempts -= 1
                 
-            # If all attempts fail, fall back to mouse mode
             print("[ERROR] No working cameras found")
             self.mode = "mouse"
             self.canvas_widget.mouse_mode = "draw"
@@ -534,11 +502,9 @@ class VirtualPainterGUI(QWidget):
         """Handle color selection with preview"""
         color = QColorDialog.getColor()
         if color.isValid():
-            # Convert to BGR for OpenCV
             r, g, b = color.red(), color.green(), color.blue()
             self.canvas.change_color((r, g, b))
             
-            # Update preview
             self.color_preview.setStyleSheet(f"""
                 QLabel {{
                     background-color: {color.name()};
@@ -547,5 +513,4 @@ class VirtualPainterGUI(QWidget):
                 }}
             """)
             
-            # Save color to database
             self.db.save_setting('last_color', str((r, g, b)))

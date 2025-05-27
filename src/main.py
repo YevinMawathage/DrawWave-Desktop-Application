@@ -4,8 +4,8 @@ from start_screen import StartScreen
 
 def main():
     app = QApplication(sys.argv)
-    start = StartScreen()  # Instantiate VirtualPainterGUI instead of StartScreen
-    start.show() # Show the canvas window directly
+    start = StartScreen()  
+    start.show() 
     sys.exit(app.exec_())
 
 if __name__ == "__main__":

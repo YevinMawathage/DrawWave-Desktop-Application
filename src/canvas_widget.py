@@ -18,7 +18,6 @@ class CanvasWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         
-        # Use the canvas with cursor if available, otherwise use the normal canvas
         canvas_data = self.current_display_canvas if self.current_display_canvas is not None else self.canvas.get_canvas()
         
         canvas_image = QImage(canvas_data.data,
@@ -55,7 +54,6 @@ class CanvasWidget(QWidget):
 
     
     def _perform_action(self, event):
-        # Convert mouse coordinates to normalized canvas coordinates
         norm_x = max(0, min(1, event.x() / self.canvas.width))
         norm_y = max(0, min(1, event.y() / self.canvas.height))
         

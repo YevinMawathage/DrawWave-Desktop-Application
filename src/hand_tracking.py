@@ -5,16 +5,15 @@ from collections import deque
 class HandTracker:
     def __init__(self):
         self.mp_hands = mp.solutions.hands
-        # Optimize hand tracking parameters
         self.hands = self.mp_hands.Hands(
             static_image_mode=False,
             max_num_hands=1,
-            model_complexity=0,  # Use lighter model (0, 1, or 2)
+            model_complexity=0,  
             min_detection_confidence=0.7,
             min_tracking_confidence=0.5
         )
         self.mp_drawing = mp.solutions.drawing_utils
-        self.tip_history = deque(maxlen=3)  # Reduce smoothing window
+        self.tip_history = deque(maxlen=3)  
         self._cached_landmarks = None
         self._last_gesture = None
         
@@ -35,25 +34,20 @@ class HandTracker:
         return image, result
 
     def recognize_gesture(self, landmarks):
-        # Cache frequently accessed values
+      
         if landmarks == self._cached_landmarks and self._last_gesture:
             return self._last_gesture
 
-        # Use numpy for faster array operations
         import numpy as np
         
-        # Get all relevant landmark positions at once
         positions = np.array([[lm.x, lm.y] for lm in landmarks.landmark])
         
-        # Check thumb (compare with base)
         thumb_up = (positions[1][1] - positions[4][1]) > 0.1
         
-        # Check other fingers (compare tips with pips)
         tips = positions[[8, 12, 16, 20]]
         pips = positions[[6, 10, 14, 18]]
         fingers_up = tips[:, 1] < pips[:, 1]
         
-        # Fast gesture classification
         if thumb_up and not np.any(fingers_up):
             gesture = "clear"
         elif fingers_up[0] and fingers_up[1] and not fingers_up[2] and not fingers_up[3]:
@@ -63,7 +57,6 @@ class HandTracker:
         else:
             gesture = "idle"
             
-        # Cache results
         self._cached_landmarks = landmarks
         self._last_gesture = gesture
         return gesture

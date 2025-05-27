@@ -12,7 +12,6 @@ class Database:
         conn = sqlite3.connect(self.db_file)
         cursor = conn.cursor()
 
-        # Create drawings table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS drawings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -23,7 +22,6 @@ class Database:
             )
         ''')
 
-        # Create settings table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS settings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,7 +31,6 @@ class Database:
             )
         ''')
 
-        # Create drawing_actions table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS drawing_actions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
